@@ -1,0 +1,9 @@
+options(stringsAsFactros = F)
+
+############################数据整理############################
+#将所有文件移动到同一个文件夹SampleFiles下
+dir.create("SampleFiles")
+filepath <- dir(path ="D:\\TCGA\\SampleFiles",full.names = TRUE)
+for(wd in filepath){
+   files <-dir(path = wd,pattern="gz$")#查看满足条件文件
+   Fromfilepath <- paste(wd,"\\",files,sep ="")
