@@ -12,8 +12,40 @@ for(wd in filepath){
    tofilepath <- paste("D:\\TCGA\\SampleFiles\\",files,sep ="")
    file.copy(fromfilepath.tofilepath)
 }
+
 ############################解压所有文件并删除原文件############################
 setwd("D:\\TCGA\\SampleFiles")
 countsFiles <-dir(path ="D:\\TCGA\\SampleFiles\\",pattern="gz$")#查看满足条件文件
 library(R.utils)
 sapply(countsFiles, gunzip)#解压函数gunzip需要安装R.utils包
+
+############################处理json文件############################
+library(rjson)
+metadata_json_File <- fromJSON(file="D:\\TCGA\\metadata.cart.2020-04-08.json")
+json_File_Info <- data.frame(filesName = c(),TCGA_Barcode = c())
+for(i in 1:length(metadata_json_File)){
+    TCGA_Barcode <- metadata_json_File[[i]][["associated_entities"]][[1]][["entity_submitter_id"]]
+    file_name <- metadata_json_File[[i]][["file_name"]]
+    json_File_Info <- rbind(json_File_Info,data.frame(filesName = file_name,TCGA_Barcode = TCGA_Barcode))
+}
+rownames(json_File_Info) <- json_File_Info[,1]
+write.csv(json_File_Info,file = "D:\\TCGA\\json_File_Info.csv")
+  
+############################获取counts矩阵############################
+filesName_To_TCGA_BarcodeFIle <- data.frame()
+countsFileNames<-dir(pattern="counts$")#list.files()函数也行
+
+allSampleRawcounts <- data.frame()
+for(txtFile in countsFilNames){
+   #每一个循环读取一个文件
+   SampleCounts <- read.table(txtFile.header =FALSE)
+   rownames(SampleCounts) <- SampleCounts[,1]
+   SampleCounts <- SampleCounts[-1]
+   #根据filesName_To_TCGA_BarcodeFile文件中文件名称与barcode对应关系，命名列名
+   colnames(SampleCounts) <- filesName_To_TCGA_BarcodeFile[paste(txtFile,".gz",sep = ""),
+   if (dim(allSampleRawCounts)[1]== 0){
+     allsampleRawCounts <- SampleCounts
+   }
+   else
+   {allSampleRawCounts<- cbind(allSampleRawCounts,SampleCounts)}
+}
