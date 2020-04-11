@@ -1,4 +1,6 @@
 options(stringsAsFactros = F)
+############################数据下载############################
+##选择CMD下gdc_client.exe进行下载
 
 ############################数据整理############################
 #将所有文件移动到同一个文件夹SampleFiles下
@@ -6,4 +8,12 @@ dir.create("SampleFiles")
 filepath <- dir(path ="D:\\TCGA\\SampleFiles",full.names = TRUE)
 for(wd in filepath){
    files <-dir(path = wd,pattern="gz$")#查看满足条件文件
-   Fromfilepath <- paste(wd,"\\",files,sep ="")
+   fromfilepath <- paste(wd,"\\",files,sep ="")
+   tofilepath <- paste("D:\\TCGA\\SampleFiles\\",files,sep ="")
+   file.copy(fromfilepath.tofilepath)
+}
+############################解压所有文件并删除原文件############################
+setwd("D:\\TCGA\\SampleFiles")
+countsFiles <-dir(path ="D:\\TCGA\\SampleFiles\\",pattern="gz$")#查看满足条件文件
+library(R.utils)
+sapply(countsFiles, gunzip)#解压函数gunzip需要安装R.utils包
