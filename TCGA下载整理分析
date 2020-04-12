@@ -95,3 +95,136 @@ gtf_Ensembl_ID <- substr(Ensembl_ID_TO_Genename[,1],1,15)
 Ensembl_ID_TO_Genename <- data.frame(gtf_Ensembl_ID,Ensembl_ID_TO_Genename[,2])
 colnames(Ensembl_ID_TO_Genename) <- c("Ensembl_ID","gene_id")
 write.csv(Ensembl_ID_TO_Genename,file = "..\\Ensembl_ID_TO_Genename.csv")
+
+#融合数据
+mergeRawCounts <- merge(Ensembl_ID_TO_Genename,RawCounts1,by="Ensembl_ID")
+
+#按照gene_id列进行排序#因为可能有多个Ensembl_ID对应同一个gene的可能
+mergeRawCounts <- mergeRawCounts[order(mergeRawCounts[,"gene_id"]),]
+#根据gene_id列建立索引
+index<-duplicated(mergeRawCounts$gene_id)
+#我们想要的那一行为FALSE，所以要取反
+mergeRawCounts <- mergeRawCounts[!index,]
+#利用基因名称作为行名
+rownames(mergeRawCounts) <-mergeRawCounts[,"gene_id"]
+# 删除前2行
+BLCA_Counts_expMatrix <- mergeRawCounts[,-c(1:2)]
+# 保存文件
+write.csv(BLCA_Counts_expMatrix,file = "..\\BLCA_Counts_expMatrix.csv")
+
+
+#############################差异分析#################################
+### 读入数据，这里我们前面的变量BLCA_Counts_expMatrix就是我们的数据，
+###所以不需要读入
+## counts <- read.csv("..\\BLCA_Counts_expMatrix.csv", header = T, row.names = 1)
+library(TCGAbiolinks)
+#请求数据
+query <- GDCquery(project = "TCGA-LUAD",
+                  data.category = "Transcriptome Profiling",
+                  data.type = "Gene Expression Quantification", 
+                  workflow.type = "HTSeq - Counts")
+# 从query中获取结果表，它可以选择带有cols参数的列，并使用rows参数返回若干行。
+# 594个barcode
+samplesDown <- getResults(query,cols=c("cases"))
+
+# 533涓偪鐦ゆ牱鏈殑barcode
+dataSmTP <- TCGAquery_SampleTypes(barcode = samplesDown, typesample = "TP")
+# 59涓甯哥粍缁囩殑barcode
+dataSmNT <- TCGAquery_SampleTypes(barcode = samplesDown,
+                                  typesample = "NT")
+# 閲嶆柊鎺掑簭鏍锋湰椤哄簭锛屾甯哥粍缁囨牱鏈湪鍓嶏紝鑲跨槫鏍锋湰鍦ㄥ悗锛屽嵆鍓?59鍒楁垜姝ｅ父鏍锋湰
+Counts<- data.frame(c(LUAD_Counts_expMatrix[,dataSmNT],LUAD_Counts_expMatrix[,dataSmTP]))
+rownames(Counts) <-row.names(LUAD_Counts_expMatrix)
+colnames(Counts) <- c(dataSmNT,dataSmTP)
+
+# 鍦╡dgeR涓紝1浠ｈ〃control鏍锋湰锛?2浠ｈ〃case鏍锋湰銆?
+# 鍘熷鏁版嵁涓湁592涓牱鏈紝瀵圭収鏈?59涓拰瀹為獙缁勫悇533涓€傛墍浠ユ垜浠彲浠ュ垱寤轰竴涓垎缁勫悜閲忋€?
+
+###################鏂规硶涓€锛歟dgeR
+# 鍖呯殑瀹夎
+# BiocManager::install( "edgeR" )
+library( "edgeR" )
+# 鍒涘缓鍒嗙粍
+group <- c(rep(1,59),rep(2,533))
+
+# 鍒涘缓DGEList绫诲瀷鍙橀噺
+# 杩欎竴姝ョ浉褰撲簬鍒涘缓涓€鍒楄〃銆傛敞鎰廹roup涓殑椤哄簭鍜宑ounts涓鍚嶈瀵瑰簲锛?
+# 涔熷氨鏄鐓х粍鍜屽疄楠岀粍瑕佹寚瀹氭纭€傝繖閲屽墠59鍒椾负control锛屽悗533鍒椾负case銆?
+y <- DGEList(counts=Counts, group=group)
+
+# 鏁版嵁杩囨护
+keep <- filterByExpr(y)
+y <- y[keep, , keep.lib.sizes=FALSE]
+
+# 璁＄畻鏍囧噯鍖栧洜瀛?
+y <- calcNormFactors(y)
+
+# 璁＄畻绂绘暎搴?
+y <- estimateDisp(y)
+# 鏄捐憲鎬ф楠?
+et <- exactTest(y)
+# 鑾峰彇鎺掑悕闈犲墠鐨勫熀鍥狅紝杩欓噷璁剧疆n=100000鏄负浜嗚緭鍑烘墍浠ュ熀鍥?
+et <- topTags(et, n=100000)
+# 杞崲涓烘暟鎹绫诲瀷
+et <- as.data.frame(et)
+# 灏嗚鍚嶇矘璐翠负鏁版嵁妗嗙殑绗竴鍒?
+et <- cbind(rownames(et),et)
+# 鎸囧畾鍒楀悕
+colnames(et) <- c("gene_id", "log2FoldChange", "log2CPM", "PValue", "FDR")
+# 淇濆瓨鏁版嵁鍒版湰鍦?
+write.table(et, "..\\all_LUAD_DEG.xls", sep = "\t", col.names = TRUE,
+            row.names = FALSE, quote = FALSE, na = "")
+# 宸紓鍩哄洜绛涢€?
+etSig <- et[which(et$PValue < 0.05 & abs(et$log2FoldChange) > 1),]
+# 鍔犲叆涓€鍒楋紝up_down 浣撶幇涓婁笅璋冧俊鎭?
+etSig[which(etSig$log2FoldChange > 0), "up_down"] <- "Up"
+etSig[which(etSig$log2FoldChange < 0), "up_down"] <- "Down"
+# 淇濆瓨鏂囦欢
+write.table(etSig, "..\\LUAD_DEG.xls", sep = "\t",
+            col.names = TRUE, row.names = FALSE, quote = FALSE, na = "")
+
+#####鏂规硶浜岋細DESeq2
+
+# 鍖呯殑瀹夎鍜屽姞杞?
+# BiocManager::install("DESeq2")
+library("DESeq2")
+####鍒涘缓鍒嗙粍
+# 鍦―ESeq2涓紝瀵圭収缁勬槸control鏍锋湰锛屽疄楠岀粍鏄痗ase銆?
+DESeq2group <- c(rep("control",59),rep("case",533))
+# 鍒涘缓瀹為獙鍒嗙粍
+colData <- data.frame(row.names = names(Counts),
+                      condition =factor(DESeq2group,
+                      levels = c("control","case")))
+# 鏋勫缓DESeqDataSet瀵硅薄
+# 鏋勫缓DESeqDataSet瀵硅薄鐢ㄤ簬鍒嗘瀽锛宑olData鎸囧畾鎴戜滑鐨勬牱鏈俊鎭拰鍒嗙粍鍒楄〃锛?
+# design = ~ condition琛ㄧず鍒嗙粍淇℃伅瀹夎colData鐨刢ondition鍒楀垎缁勩€?
+dds <- DESeqDataSetFromMatrix(countData = Counts, colData = colData,
+                              design = ~ condition)
+
+# 鍑芥暟鍒嗘瀽宸紓
+dds <- DESeq(dds)
+# 璁＄畻鏍囧噯鍖栧洜瀛?
+sizeFactors(dds)
+#鎻愬彇宸紓琛ㄨ揪缁撴灉
+res <- results(dds)
+res <- as.data.frame(res)
+# 娣诲姞涓€鍒?
+res <- cbind(rownames(res), res)
+# 閲嶅懡鍚嶅垪鍚?
+colnames(res) <- c("gene_id", "baseMean", "log2FoldChange", "lfcSE", "stat",
+                   "pval", "padj")
+#淇濆瓨鏂囦欢鍒版湰鍦?
+write.table(res, "..\\case-vs-control-all-DESeq2.gene.xls",
+            sep = "\t", col.names = TRUE, row.names = FALSE, quote = FALSE,
+            na = "")
+
+# 鑾峰彇宸紓鍩哄洜
+
+resSig <- res[which(res$pval < 0.05 & abs(res$log2FoldChange) > 1),]
+resSig[which(resSig$log2FoldChange > 0), "up_down"] <- "Up"
+resSig[which(resSig$log2FoldChange < 0), "up_down"] <- "Down"
+write.table(resSig, "..\\case-vs-control-diff-pval-0.05-FC-2-DESeq2.gene.xls",
+            sep = "\t", col.names = TRUE, row.names = FALSE, quote = FALSE, na = "")
+
+
+
