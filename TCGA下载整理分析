@@ -202,8 +202,9 @@ dds <- DESeqDataSetFromMatrix(countData = Counts, colData = colData,
                               design = ~ condition)
 
 # 函数分析差异
-dds <- DESeq(dds) #这步特别慢
+dds <- DESeq(dds) #这步特别慢，需6小时
 # 计算标准化因???
+dds2 <- dds #暂存
 sizeFactors(dds)
 #提取差异表达结果
 res <- results(dds)
