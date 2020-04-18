@@ -205,9 +205,9 @@ dds <- DESeqDataSetFromMatrix(countData = Counts, colData = colData,
 dds <- DESeq(dds) #这步特别慢，需6小时
 # 计算标准化因???
 dds2 <- dds #暂存
-sizeFactors(dds)
+sizeFactors(dds2)
 #提取差异表达结果
-res <- results(dds)
+res <- results(dds2)
 res <- as.data.frame(res)
 # 添加一???
 res <- cbind(rownames(res), res)
